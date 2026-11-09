@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en" data-storage="local"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Build and browse hierarchies on a visual board with Carbonara."><title>Carbonara</title><link rel="stylesheet" href="styles.css"></head>
+<body><header><h1><img src="carbonara.png" alt="Carbonara" class="logo"></h1><span id="file"></span><div class="primary-actions"><button id="language" aria-label="Switch box name language">Name: EN</button><button id="mode" aria-label="Switch board mode">Mode: Edit</button></div><div class="actions"><button id="add-layer">+ Add layer</button><button id="remove-layer" class="danger">Remove last layer</button><button id="renumber">Renumber IDs</button><button id="toggle-all">Collapse all</button><button id="undo" disabled>Undo</button><button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button id="fit">Fit</button><button id="template">Download template</button><button id="sample" hidden>Try sample</button><button id="open">Open</button><button id="new">New</button><button id="generate" class="primary">Save</button></div></header>
+<input id="workbook-file" type="file" accept=".xlsx" hidden>
+<div class="statusbar"><span id="status" role="status"></span></div>
+<main id="workspace" aria-label="Hierarchy board"><div id="stage"><div id="board"></div><svg id="wires" aria-label="Hierarchy connections"></svg></div></main>
+<dialog id="workbook-picker" aria-labelledby="workbook-picker-title">
+  <div class="dialog-head"><h2 id="workbook-picker-title">Open workbook</h2><button type="button" class="close" id="close-workbook-picker" aria-label="Close">×</button></div>
+  <form id="workbook-folder-form" class="fields">
+    <label class="wide">Folder path<input id="workbook-folder" type="text" required></label>
+    <div class="wide"><button type="submit">Go</button> <button type="button" id="workbook-parent" disabled>Up one folder</button> <button type="button" id="workbook-home">Hierarchy folder</button></div>
+  </form>
+  <p id="workbook-picker-status" role="status"></p>
+  <ul id="workbook-entries" aria-label="Folders and workbooks"></ul>
+</dialog>
+<dialog id="editor"><form id="form"><div class="dialog-head"><h2 id="editor-title">Add item</h2><button type="button" class="close" id="close" aria-label="Close">×</button></div><div class="fields"><label>Layer<input id="layer-label" disabled></label><label>ID<input id="item-id" readonly></label><label id="parent-wrap">Parent<select id="parent"></select></label><label>English name<input id="name-en" required></label><label>Thai name <small>(optional)</small><input id="name-th"></label><label>Definition<textarea id="definition"></textarea></label><label>Remark<textarea id="remark"></textarea></label><label class="check wide"><input type="checkbox" id="active" checked> Active</label></div><div class="dialog-foot"><button type="button" id="delete" class="danger">Delete item</button><span></span><button type="button" id="cancel">Cancel</button><button class="primary" type="submit">Save item</button></div></form></dialog>
+<script type="module" src="app.js"></script></body></html>

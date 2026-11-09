@@ -1,0 +1,10 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.recent.json
+/dist/
+*.xlsx
+!hierarchy/sample_hierarchy.xlsx
+*.zip
+start_app.cmd
