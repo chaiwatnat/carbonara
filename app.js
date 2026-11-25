@@ -12,7 +12,15 @@ import {createWorkbook, readWorkbook} from './workbook.mjs';
   const children = uid => state.nodes.filter(n => n.parent === uid);
   const displayName = n => n ? (language === 'th' ? (n.name_th?.trim() || n.name_en) : (n.name_en?.trim() || n.name_th)) : '';
   const msg = s => { $('status').textContent = s; };
-  const nextId = i => String(Math.max(0, ...state.nodes.filter(n => n.level === i && /^\d+$/.test(n.id)).map(n => Number(n.id))) + 1);
+  function nextId(level) {
+    let largest = 0n;
+    for (const node of state.nodes) {
+      if (node.level !== level || !/^\d+$/.test(node.id)) continue;
+      const id = BigInt(node.id);
+      if (id > largest) largest = id;
+    }
+    return String(largest + 1n);
+  }
   function updateFile() { const date = savedAt ? new Date(savedAt * 1000) : null; const stamp = date && !isNaN(date) ? ` saved ${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}:${String(date.getSeconds()).padStart(2,'0')}` : ''; $('file').textContent = (path ? path.split(/[\\/]/).pop()+stamp : '') + (dirty ? ' • Unsaved changes' : ''); }
   function mark() { dirty = true; updateFile(); }
   function checkpoint() { history.push(JSON.stringify(state)); if (history.length > 80) history.shift(); $('undo').disabled = false; }
@@ -51,7 +59,7 @@ import {createWorkbook, readWorkbook} from './workbook.mjs';
       return `<section class="lane" style="--color:${esc(layer.color)}" data-lane="${i}"><div class="lane-head"><input type="text" maxlength="31" aria-label="Layer ${i+1} name" data-name="${i}" value="${esc(layer.name)}" ${viewMode?'disabled':''}><input type="color" aria-label="Layer ${i+1} color" data-color="${i}" value="${esc(layer.color)}" ${viewMode?'disabled':''}></div><p class="count">Layer ${i+1} · ${state.nodes.filter(n=>n.level===i).length} items</p><div class="cards">${nodes.map(n => {
         const branch = children(n.uid).length ? icon('collapse',collapsed.has(n.uid)?'Expand branch':'Collapse branch',collapsed.has(n.uid)?'▸':'▾','branch-icon') : '';
         const name = displayName(n);
-        return `<article class="card ${viewMode?'view-card':''} ${n.active?'':'inactive'} ${connecting===n.uid?'connecting':''}" draggable="${!viewMode}" data-uid="${esc(n.uid)}"><div class="card-title" title="${esc(viewMode ? name : 'Drag to reorder')}"><strong>${esc(name)}</strong><span class="id">#${esc(n.id)}</span>${viewMode?branch:''}</div>${viewMode?'':`<small>${n.parent ? 'Parent: '+esc(displayName(get(n.parent)) || 'Unknown') : (i ? 'Not connected' : 'Top layer')}</small><div class="card-actions">${icon('edit','Edit','✎')}${icon('duplicate','Duplicate','⧉')}${icon('connect',connecting===n.uid?'Cancel connection':'Connect','●','connect-icon')}${n.parent?icon('disconnect','Disconnect','<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.64 18.36 18.36 5.64"/></svg>','disconnect-icon'):''}${icon('delete','Delete box','<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V4h6v2m3 0-1 14H7L6 6m4 4v7m4-7v7"/></svg>','delete-icon')}${branch}</div>`}</article>`;
+        return `<article class="card ${viewMode?'view-card':''} ${n.active?'':'inactive'} ${connecting===n.uid?'connecting':''}" draggable="${!viewMode}" data-uid="${esc(n.uid)}"><div class="card-title" title="${esc(viewMode ? name : 'Drag to reorder or move to another layer')}"><strong>${esc(name)}</strong><span class="id">#${esc(n.id)}</span>${viewMode?branch:''}</div>${viewMode?'':`<small>${n.parent ? 'Parent: '+esc(displayName(get(n.parent)) || 'Unknown') : (i ? 'Not connected' : 'Top layer')}</small><div class="card-actions">${icon('edit','Edit','✎')}${icon('duplicate','Duplicate','⧉')}${icon('connect',connecting===n.uid?'Cancel connection':'Connect','●','connect-icon')}${n.parent?icon('disconnect','Disconnect','<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.64 18.36 18.36 5.64"/></svg>','disconnect-icon'):''}${icon('delete','Delete box','<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V4h6v2m3 0-1 14H7L6 6m4 4v7m4-7v7"/></svg>','delete-icon')}${branch}</div>`}</article>`;
       }).join('')}</div>${viewMode?'':`<button class="add" data-add="${i}">+ Add item</button>`}</section>`;
     }).join('');
     $('add-layer').disabled = viewMode || state.layers.length >= 5; $('remove-layer').disabled = viewMode || state.layers.length <= 1;
@@ -89,10 +97,41 @@ import {createWorkbook, readWorkbook} from './workbook.mjs';
     const parent=a.level<b.level?a:b, child=parent===a?b:a;
     checkpoint(); child.parent=parent.uid; collapsed.delete(parent.uid); connecting=null; mark(); render(); msg('Items connected.');
   }
-  function reorder(uid, targetUid, after = false) {
-    if (uid===targetUid) return;
-    const node=get(uid), target=get(targetUid); if (!node || !target || node.level!==target.level) return;
-    checkpoint(); state.nodes.splice(state.nodes.indexOf(node),1); state.nodes.splice(state.nodes.indexOf(target)+(after?1:0),0,node); mark(); render();
+  function dropDestination(target) {
+    const node = get(dragged);
+    const lane = target.closest('[data-lane]');
+    if (!node || !lane || viewMode) return;
+    const destination = Number(lane.dataset.lane);
+    const card = target.closest('[data-uid]');
+    if (card?.dataset.uid === node.uid || (destination === node.level && !card)) return;
+    return {node, destination, card};
+  }
+  function moveNode(node, destination, target, after) {
+    checkpoint();
+    if (node.level !== destination) {
+      const detachedChildren = children(node.uid);
+      const hadLinks = Boolean(node.parent) || detachedChildren.length > 0;
+      node.parent = '';
+      detachedChildren.forEach(child => { child.parent = ''; });
+      const id = node.id.toLowerCase();
+      if (state.nodes.some(item => item.level === destination && item.id.toLowerCase() === id)) {
+        node.id = nextId(destination);
+      }
+      node.level = destination;
+      collapsed.delete(node.uid);
+      connecting = null;
+      const reconnect = (node.active && destination > 0) || detachedChildren.some(child => child.active);
+      msg([
+        `Moved to ${state.layers[destination].name}.`,
+        hadLinks && 'Existing links disconnected.',
+        reconnect && 'Reconnect active items before saving.',
+      ].filter(Boolean).join(' '));
+    }
+    state.nodes.splice(state.nodes.indexOf(node), 1);
+    const position = target ? state.nodes.indexOf(target) + Number(after) : state.nodes.length;
+    state.nodes.splice(position, 0, node);
+    mark();
+    render();
   }
   function deleteNode(uid) { const n=get(uid); if(!n)return; const count=children(uid).length; if(!confirm(`Delete this box?${count?' Its direct children will be disconnected.':''}`))return; checkpoint(); state.nodes=state.nodes.filter(x=>x.uid!==uid); state.nodes.forEach(x=>{if(x.parent===uid)x.parent='';});collapsed.delete(uid);if(connecting===uid)connecting=null;mark();render(); }
   $('board').addEventListener('click', e => {
@@ -108,9 +147,23 @@ import {createWorkbook, readWorkbook} from './workbook.mjs';
       case 'delete': deleteNode(n.uid); break;
     }
   });
-  $('board').addEventListener('dragstart',e=>{ const card=e.target.closest('[data-uid]'); if (!card) return; dragged=card.dataset.uid; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',dragged); card.classList.add('dragging'); });
-  $('board').addEventListener('dragover',e=>{ const card=e.target.closest('[data-uid]'); if(card && get(card.dataset.uid)?.level===get(dragged)?.level) { e.preventDefault(); e.dataTransfer.dropEffect='move'; } });
-  $('board').addEventListener('drop',e=>{ const card=e.target.closest('[data-uid]'); if(card && dragged) { e.preventDefault(); reorder(dragged,card.dataset.uid,e.clientY > card.getBoundingClientRect().top+card.offsetHeight/2); } dragged=null; });
+  $('board').addEventListener('dragstart',e=>{ const card=e.target.closest('[data-uid]'); if (!card || viewMode) return; dragged=card.dataset.uid; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',dragged); card.classList.add('dragging'); });
+  $('board').addEventListener('dragover', e => {
+    if (!dropDestination(e.target)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+  $('board').addEventListener('drop', e => {
+    const drop = dropDestination(e.target);
+    if (!drop) return;
+    e.preventDefault();
+    dragged = null;
+    const {node, destination, card} = drop;
+    const target = card ? get(card.dataset.uid) : null;
+    const bounds = card?.getBoundingClientRect();
+    const after = bounds ? e.clientY > bounds.top + bounds.height / 2 : false;
+    moveNode(node, destination, target, after);
+  });
   $('board').addEventListener('dragend',()=>{ dragged=null; document.querySelectorAll('.dragging').forEach(x=>x.classList.remove('dragging')); });
   $('board').addEventListener('change',e=>{ if(e.target.dataset.name!==undefined){checkpoint();state.layers[+e.target.dataset.name].name=e.target.value.trim();mark();} if(e.target.dataset.color!==undefined){checkpoint();state.layers[+e.target.dataset.color].color=e.target.value;mark();render();} });
   $('add-layer').onclick=()=>{if(state.layers.length<5){checkpoint();let i=state.layers.length;state.layers.push({name:`Layer${i+1}`,color:colors[i]});mark();render();fit();}};

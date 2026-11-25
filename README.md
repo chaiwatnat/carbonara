@@ -37,7 +37,7 @@ The sample hierarchy opens on first use. After that, Carbonara reopens the workb
 1. Explore the sample, select **New** for an empty hierarchy, or select **Open** to open a Carbonara workbook.
 2. Rename layers or change their colors. Add or remove layers as needed.
 3. Select **Add item** and enter an English name. Thai names, definitions, and remarks are optional.
-4. Connect each active item to a parent in the preceding layer using the item editor or **Connect**. Drag items to reorder them.
+4. Connect active items below the first layer to a parent in the preceding layer using the item editor or **Connect**. Drag an item within a layer to reorder it, or drag it to another layer to move it and disconnect its existing links. Reconnect any affected active items before saving.
 5. Use **Mode** to switch to a compact view, **Name** to switch languages, and the zoom and collapse controls to explore the board.
 
 Use **Download template** to get a blank Excel workbook in Carbonara's format. Keep its `summary` and hidden `_hierarchy` sheets so Carbonara can reopen it.
